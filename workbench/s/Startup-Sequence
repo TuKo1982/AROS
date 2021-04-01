@@ -1,5 +1,5 @@
-boot/amiga/AROSBootstrap rom boot/amiga/aros.elf.gz
-c:setclock load
+;boot/amiga/AROSBootstrap rom boot/amiga/aros.elf.gz
+;c:setclock load
 
 FailAt 21
 
@@ -129,6 +129,7 @@ If EXISTS "S:User-Startup"
 EndIf
 
 ;echo "Wanderer"
-WANDERER:Wanderer
+;WANDERER:Wanderer
+SYS:System/Workbook
 
 EndCli
