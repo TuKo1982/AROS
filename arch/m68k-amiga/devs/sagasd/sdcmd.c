@@ -47,8 +47,8 @@
 #define error(fmt,args...)      sdcmd_log(sd, SDLOG_ERROR, fmt ,##args)
 
 #define SDCMD_CLKDIV_SLOW       0xFF
-#define SDCMD_CLKDIV_FAST       0x02
-#define SDCMD_CLKDIV_FASTER     0x01
+#define SDCMD_CLKDIV_FAST       0x01
+#define SDCMD_CLKDIV_FASTER     0x00
 
 static UBYTE crc7(UBYTE crc, UBYTE byte)
 {
@@ -150,24 +150,47 @@ static UWORD sdcmd_ins(struct sdcmd *sd, UWORD crc, UBYTE *buff, size_t len)
     if (len == 0)
         return crc;
 
+//       /* Since the read of the SAGA_SD_DATA will stall until
+//        * filled by the SPI, we amortize that cost by computing
+//        * the CRC16 while waiting for the next fill.
+//        */
+//       Write8(dataio, 0xff);
+//       for (len--; len > 0; len--, buff++) {
+//           val = Read8(dataio + SAGA_SD_DATA);
+//           Write8(dataio + SAGA_SD_DATA, 0xff);
+//           crc = crc16(crc, val);
+//           *buff = val;
+//           //if (DEBUG)
+//               //diag("SD_DATA => $%02lx", val);
+//       }
+//       val = Read8(dataio + SAGA_SD_DATA);
+//       crc = crc16(crc, val);
+//       *buff = val;
+//   
+//       return crc;
+
+
     /* Since the read of the SAGA_SD_DATA will stall until
      * filled by the SPI, we amortize that cost by computing
      * the CRC16 while waiting for the next fill.
      */
-    Write8(dataio, 0xff);
-    for (len--; len > 0; len--, buff++) {
-        val = Read8(dataio + SAGA_SD_DATA);
-        Write8(dataio + SAGA_SD_DATA, 0xff);
-        crc = crc16(crc, val);
-        *buff = val;
-        //if (DEBUG)
-            //diag("SD_DATA => $%02lx", val);
-    }
-    val = Read8(dataio + SAGA_SD_DATA);
-    crc = crc16(crc, val);
-    *buff = val;
 
-    return crc;
+//    for (len--; len > 0; len--, buff++) {
+//        val = *((UBYTE*)0xde0002);
+//      //  Write8(dataio + SAGA_SD_DATA, 0xff);
+//        *buff = val;
+//    }
+
+    asm volatile(
+      "       move.b #0xff,(0xDE0000)        \n" 
+      "       subq.l #1,%[count]              \n"
+      "       bra 2f                         \n"
+      "1:     move.b (0xDE0002),(%[buff])+   \n"
+      "2:     dbra   %[count],1b             \n"
+      "       move.b (0xDE0000),(%[buff])+   \n"
+              :[count]"+d"(len),[buff]"+a"(buff)::"cc");
+
+    return;
 }
             
 BOOL sdcmd_present(struct sdcmd *sd)
@@ -354,14 +377,15 @@ UBYTE sdcmd_read_packet(struct sdcmd *sd, UBYTE *buff, int len)
         return SDERRF_TIMEOUT;
     }
 
-    crc = sdcmd_ins(sd, 0, buff, len);
+    //crc = sdcmd_ins(sd, 0, buff, len);
+    sdcmd_ins(sd, 0, buff, len);
 
     /* Read the CRC16 */
     tmp = (UWORD)sdcmd_in(sd) << 8;
     tmp |= sdcmd_in(sd);
 
-    if (tmp != crc)
-        return SDERRF_CRC;
+//    if (tmp != crc)
+//        return SDERRF_CRC;
 
     return 0;
 }
